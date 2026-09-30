@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:map_practice_for_future/screens/sign_in_screen.dart';
+import 'package:map_practice_for_future/screens/sign_up_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -65,7 +66,12 @@ class HomeScreen extends StatelessWidget {
                   // Create Account Text
                   GestureDetector(
                     onTap: () {
-                      // Navigate to create account screen
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => SignUpScreen(),
+                        ),
+                      );
                     },
                     child: Text(
                       'Create an account',
