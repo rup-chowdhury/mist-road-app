@@ -34,7 +34,7 @@ class _MapScreenState extends State<MapScreen> {
   final Completer<GoogleMapController> _mapController =
       Completer<GoogleMapController>();
 
-  late GoogleMapController googleMapController;
+  GoogleMapController? googleMapController;
 
   LatLng? _currentPosition;
 
@@ -65,20 +65,21 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final body = _currentPosition == null
+        ? const Center(
+            child: Text(
+              'Loading your location...',
+              style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18),
+            ),
+          )
+        : buildGoogleMap();
+
     return Scaffold(
       body: Stack(children: [
-        // _currentPosition == null
-        //     ? const Center(
-        //         child: Text(
-        //           'Loading.....',
-        //           style: TextStyle(
-        //               color: Colors.black,
-        //               fontWeight: FontWeight.bold,
-        //               fontSize: 18),
-        //         ),
-        //       )
-        //     :
-        buildGoogleMap(),
+        body,
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -135,7 +136,11 @@ class _MapScreenState extends State<MapScreen> {
       ],
     );
 
-    displayPrediction(p!, homeScaffoldKey.currentState);
+    if (p == null) {
+      return;
+    }
+
+    await displayPrediction(p, homeScaffoldKey.currentState);
   }
 
   void onError(pl.PlacesAutocompleteResponse response) {
@@ -155,12 +160,20 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> displayPrediction(
       pl.Prediction p, ScaffoldState? currentState) async {
+    if (p.placeId == null) {
+      return;
+    }
+
     pl.GoogleMapsPlaces places = pl.GoogleMapsPlaces(
         apiKey: kGoogleApiKey,
         apiHeaders: await const GoogleApiHeaders().getHeaders());
 
     pl.PlacesDetailsResponse detail =
         await places.getDetailsByPlaceId(p.placeId!);
+
+    if (detail.result.geometry == null) {
+      return;
+    }
 
     final lat = detail.result.geometry!.location.lat;
     final lng = detail.result.geometry!.location.lng;
@@ -174,8 +187,10 @@ class _MapScreenState extends State<MapScreen> {
     destinationTextEditingController.text = detail.result.name;
     setState(() {});
 
-    googleMapController
-        .animateCamera(CameraUpdate.newLatLngZoom(LatLng(lat, lng), 14.0));
+    final controller = googleMapController;
+    if (controller != null) {
+      controller.animateCamera(CameraUpdate.newLatLngZoom(LatLng(lat, lng), 14.0));
+    }
 
     print('Checking..............');
     print(detail);
@@ -189,6 +204,26 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   GoogleMap buildGoogleMap() {
+    final currentMarker = _currentPosition == null
+        ? null
+        : Marker(
+            markerId: const MarkerId("_currentLocation"),
+            icon: BitmapDescriptor.defaultMarkerWithHue(184),
+            position: _currentPosition!,
+          );
+
+    final markers = <Marker>{
+      ...markersList,
+      if (currentMarker != null) currentMarker,
+      Marker(
+        markerId: const MarkerId("_destinationLocation"),
+        icon: BitmapDescriptor.defaultMarker,
+        position: _dhakaAirportPosition,
+        draggable: true,
+        onDragEnd: setDestination,
+      ),
+    };
+
     return GoogleMap(
       initialCameraPosition: CameraPosition(
         target: _initialPosition,
@@ -209,77 +244,8 @@ class _MapScreenState extends State<MapScreen> {
         _mapController.complete(controller);
         googleMapController = controller;
       },
-      markers: {
-        ...markersList,
-        Marker(
-          markerId: MarkerId("_currentLocation"),
-          icon: BitmapDescriptor.defaultMarkerWithHue(184),
-          position: _currentPosition!,
-        ),
-        // Marker(
-        //   markerId: MarkerId("_sourceLocation"),
-        //   icon: BitmapDescriptor.defaultMarker,
-        //   position: _initialPosition,
-        //   draggable: true
-        // ),
-        Marker(
-          markerId: MarkerId("_destinationLocation"),
-          icon: BitmapDescriptor.defaultMarker,
-          position: _dhakaAirportPosition,
-          draggable: true,
-          onDragEnd: setDestination,
-        ),
-      },
-      circles: _circles
-      // <Circle>{
-      //   Circle(
-      //       circleId: const CircleId('accidents-in-agargaon'),
-      //       fillColor: Colors.red.withOpacity(0.5),
-      //       center: const LatLng(
-      //         23.776925942436396,
-      //         90.38014548482569,
-      //       ),
-      //       radius: 50,
-      //       strokeColor: Colors.red,
-      //       strokeWidth: 5),
-      //   Circle(
-      //       circleId:
-      //       const CircleId('extensive-injury-accidents-in-mirpur12-mor'),
-      //       fillColor: Colors.orange.withValues(alpha: 100),
-      //       center: const LatLng(
-      //         23.827890458890693,
-      //         90.36406172529641,
-      //       ),
-      //       radius: 7,
-      //       strokeColor: Colors.orange,
-      //       strokeWidth: 0),
-      //   Circle(
-      //       circleId: const CircleId('minor-injury-accidents-in-mirpur12-mor'),
-      //       fillColor: Colors.green.withOpacity(0.5),
-      //       center: const LatLng(
-      //         23.82792480908795,
-      //         90.36390615718047,
-      //       ),
-      //       radius: 7,
-      //       strokeColor: Colors.green,
-      //       strokeWidth: 0),
-      //   Circle(
-      //       circleId:
-      //       const CircleId('vehicle-collision-accidents-in-mirpur12-mor'),
-      //       fillColor: Colors.yellow.withOpacity(0.5),
-      //       center: const LatLng(
-      //         23.827910087575948,
-      //         90.36395443694059,
-      //       ),
-      //       radius: 7,
-      //       strokeColor: Colors.yellow,
-      //       strokeWidth: 0,
-      //       onTap: () {
-      //         print(
-      //             'High possibility of vehicle collision, drive slowly and maintain the rules.');
-      //       }),
-      // },
-      ,
+      markers: markers,
+      circles: _circles,
       polylines: Set<Polyline>.of(polylines.values),
     );
   }
@@ -329,6 +295,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<List<LatLng>> getPolylinePoints() async {
+    if (_currentPosition == null) {
+      return [];
+    }
+
     List<LatLng> polyLineCoordinates = [];
     PolylinePoints polylinePoints = PolylinePoints();
     // PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
@@ -346,8 +316,8 @@ class _MapScreenState extends State<MapScreen> {
         PointLatLng(
             _dhakaAirportPosition.latitude, _dhakaAirportPosition.longitude),
         optimizeWaypoints: true,
-    avoidHighways: false,
-    travelMode: TravelMode.walking);
+        avoidHighways: false,
+        travelMode: TravelMode.walking);
     if (result.points.isNotEmpty) {
       for (var point in result.points) {
         polyLineCoordinates.add(LatLng(point.latitude, point.longitude));
@@ -372,6 +342,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void drawPolyline() {
+    if (_currentPosition == null) {
+      return;
+    }
+
     setState(() {
       getLocationUpdate().then((_) => {
             getPolylinePoints().then(
@@ -385,6 +359,9 @@ class _MapScreenState extends State<MapScreen> {
 
   void setDestination(LatLng destination) {
     _dhakaAirportPosition = destination;
+    if (_currentPosition == null) {
+      return;
+    }
     getPolylinePoints();
   }
 

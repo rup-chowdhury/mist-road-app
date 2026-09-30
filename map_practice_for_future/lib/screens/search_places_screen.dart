@@ -21,7 +21,7 @@ class _SearchPlacesScreenState extends State<SearchPlacesScreen> {
 
   Set<Marker> markersList = {};
 
-  late GoogleMapController googleMapController;
+  GoogleMapController? googleMapController;
 
   final Mode _mode = Mode.overlay;
 
@@ -67,7 +67,11 @@ class _SearchPlacesScreenState extends State<SearchPlacesScreen> {
           Component(Component.country, "bd")
         ]);
 
-    displayPrediction(p!, homeScaffoldKey.currentState);
+    if (p == null) {
+      return;
+    }
+
+    displayPrediction(p, homeScaffoldKey.currentState);
   }
 
   void onError(PlacesAutocompleteResponse response) {
@@ -87,11 +91,19 @@ class _SearchPlacesScreenState extends State<SearchPlacesScreen> {
 
   Future<void> displayPrediction(
       Prediction p, ScaffoldState? currentState) async {
+    if (p.placeId == null) {
+      return;
+    }
+
     GoogleMapsPlaces places = GoogleMapsPlaces(
         apiKey: kGoogleApiKey,
         apiHeaders: await const GoogleApiHeaders().getHeaders());
 
     PlacesDetailsResponse detail = await places.getDetailsByPlaceId(p.placeId!);
+
+    if (detail.result.geometry == null) {
+      return;
+    }
 
     final lat = detail.result.geometry!.location.lat;
     final lng = detail.result.geometry!.location.lng;
@@ -104,7 +116,9 @@ class _SearchPlacesScreenState extends State<SearchPlacesScreen> {
 
     setState(() {});
 
-    googleMapController
-        .animateCamera(CameraUpdate.newLatLngZoom(LatLng(lat, lng), 14.0));
+    final controller = googleMapController;
+    if (controller != null) {
+      controller.animateCamera(CameraUpdate.newLatLngZoom(LatLng(lat, lng), 14.0));
+    }
   }
 }
